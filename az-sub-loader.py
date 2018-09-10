@@ -3,6 +3,7 @@
 import json
 import argparse
 import sys
+import getpass
 
 from os.path import split as osplit
 from os.path import join as ojoin
@@ -32,10 +33,16 @@ parser.add_argument(
          'default=~/.azure-sub-loader.json'
 )
 parser.add_argument(
-    '--generate-config',
+    '-a', '--add-subscription',
     required=False,
     action='store_true',
-    help='Generates a simple configuration file. Prints to stdout.'
+    help='Adds new subscription to config file.'
+)
+parser.add_argument(
+    '-d', '--delete-subscription',
+    required=False,
+    metavar="Subscription Name",
+    help='Adds new subscription to config file.'
 )
 
 if (len(sys.argv) < 2):
@@ -46,23 +53,9 @@ cmd_args = parser.parse_args()
 SUBS = cmd_args.subscription
 CFG_PATH = odirname(cmd_args.config)
 CFG_FILE = osplit(cmd_args.config)[1]
-GEN_CFG = cmd_args.generate_config
 SHOW = cmd_args.show
-
-cfg_templ = {
-    "SUBSCRIPTION_NAME": {
-        "tenant_id": "id",
-        "subscription_id": "id",
-        "client_id": "id",
-        "client_secret": "id"
-    },
-    "NEXT_SUBSCRIPTION_NAME": {
-        "tenant_id": "id",
-        "subscription_id": "id",
-        "client_id": "id",
-        "client_secret": "id"
-    }
-}
+ADD_SUB = cmd_args.add_subscription
+DEL_SUB = cmd_args.delete_subscription
 
 exp_templ = """export TF_VAR_tenant_id={tenant_id}
 export TF_VAR_subscription_id={subscription_id}
@@ -70,50 +63,73 @@ export TF_VAR_client_id={client_id}
 export TF_VAR_client_secret={client_secret}"""
 
 
+def _get_config(cfg_file_path):
+    if oisfile(cfg_file_path):
+        with open(cfg_file_path, 'r') as fh:
+            return json.load(fh)
+    return {}
+
+
+def get_avail_subs(cfg_file_path):
+    return _get_config(cfg_file_path).keys()
+
+
+def get_sub_secrets(sub_name, cfg_file_path):
+    config = _get_config(cfg_file_path)
+    try:
+        return config[sub_name]
+    except KeyError as exc:
+        return False
+
+
+def add_sub_cfg(sub_name, tenant_id, sub_id,
+                client_id, client_secret, cfg_file_path):
+    config = _get_config(cfg_file_path)
+    config[sub_name] = {
+        "tenant_id": tenant_id,
+        "subscription_id": sub_id,
+        "client_id": client_id,
+        "client_secret": client_secret
+    }
+    return config
+
+
+def del_sub_cfg(sub_name, cfg_file_path):
+    config = _get_config(cfg_file_path)
+    config.pop(sub_name, None)
+    return config
+
+
 def main():
-    if GEN_CFG:
-        # Check if config file already exists and ask to overwrite
-        if oisfile(ojoin(CFG_PATH, CFG_FILE)):
-            print("Configuration file already exists.")
-            answere = input("Do you want to overwrite? Only 'yes' will work. ")
-            if answere == "yes":
-                with open(ojoin(CFG_PATH, CFG_FILE), 'w') as fh:
-                    json.dump(cfg_templ, fh, indent=2)
-            else:
-                print("No config file generated.")
-        else:
-            with open(ojoin(CFG_PATH, CFG_FILE), 'w') as fh:
-                json.dump(cfg_templ, fh, indent=2)
-    elif SHOW:
-        if oisfile(ojoin(CFG_PATH, CFG_FILE)):
-            with open(ojoin(CFG_PATH, CFG_FILE), 'r') as fh:
-                config = json.load(fh)
-                print("Following subscriptions are availabe in your config:")
-                for sub in config.keys():
-                    print(f"\t{sub}")
-        else:
-            print("Configuration file does not exist. Use --generate-config")
+    config_file = ojoin(CFG_PATH, CFG_FILE)
+    if SHOW:
+        subs = get_avail_subs(config_file)
+        print("Following subscriptions are availabe in your config:")
+        print("\n".join(subs))
+    elif ADD_SUB:
+        print("New configuration entry will be created.")
+        print("Please provide appropriate information:")
+        sub_name = input("Subscription name: ")
+        sub_id = input("Subscription ID: ")
+        tenant_id = input("Tenant ID: ")
+        client_id = input("Client ID: ")
+        client_secret = getpass.getpass("Client Secret: ")
+        new_cfg = add_sub_cfg(sub_name, tenant_id, sub_id,
+                              client_id, client_secret, config_file)
+        with open(config_file, 'w') as fh:
+            json.dump(new_cfg, fh, indent=2)
+    elif DEL_SUB:
+        new_cfg = del_sub_cfg(DEL_SUB, config_file)
+        with open(config_file, 'w') as fh:
+            json.dump(new_cfg, fh, indent=2)
 
+        print(f"{DEL_SUB} deleted.")
     else:
-        with open(ojoin(CFG_PATH, CFG_FILE), 'r') as fh:
-            config = json.load(fh)
-
-        try:
-            sub = config[SUBS]
-        except KeyError as exc:
-            print(f"Subscription {SUBS} does not exist in config file.")
-            sys.exit(1)
+        variables = get_sub_secrets(SUBS, config_file)
+        if variables:
+            print(exp_templ.format(**variables))
         else:
-            try:
-                print(exp_templ.format(
-                    tenant_id=sub['tenant_id'],
-                    subscription_id=sub['subscription_id'],
-                    client_id=sub['client_id'],
-                    client_secret=sub['client_secret']))
-            except KeyError as exc:
-                print(f"Configuration for {SUBS} is missing.")
-                print("Please add all neccesary parameters or use"
-                      " --generate-config to get a sample configuration.")
+            print(f"Subscription {SUBS} does not exist in config file.")
 
 
 if __name__ == "__main__":
