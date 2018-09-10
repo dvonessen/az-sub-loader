@@ -21,7 +21,7 @@ parser.add_argument(
 parser.add_argument(
     '-c', '--config',
     required=False,
-    default=ojoin(Path.home(), '.azure-subscription-loader.json'),
+    default=ojoin(Path.home(), '.az-sub-loader.json'),
     help='Path to config file, where subscription credentials are saved. '
          'default=~/.azure-sub-loader.json'
 )
