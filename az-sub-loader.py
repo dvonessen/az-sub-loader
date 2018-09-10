@@ -19,6 +19,12 @@ parser.add_argument(
     help='Subscription must be the same as in azure-sub-loader.json.'
 )
 parser.add_argument(
+    '--show',
+    required=False,
+    action='store_true',
+    help='Shows available subscriptions in config file.'
+)
+parser.add_argument(
     '-c', '--config',
     required=False,
     default=ojoin(Path.home(), '.az-sub-loader.json'),
@@ -41,6 +47,7 @@ SUBS = cmd_args.subscription
 CFG_PATH = odirname(cmd_args.config)
 CFG_FILE = osplit(cmd_args.config)[1]
 GEN_CFG = cmd_args.generate_config
+SHOW = cmd_args.show
 
 cfg_templ = {
     "SUBSCRIPTION_NAME": {
@@ -77,6 +84,16 @@ def main():
         else:
             with open(ojoin(CFG_PATH, CFG_FILE), 'w') as fh:
                 json.dump(cfg_templ, fh, indent=2)
+    elif SHOW:
+        if oisfile(ojoin(CFG_PATH, CFG_FILE)):
+            with open(ojoin(CFG_PATH, CFG_FILE), 'r') as fh:
+                config = json.load(fh)
+                print("Following subscriptions are availabe in your config:")
+                for sub in config.keys():
+                    print(f"\t{sub}")
+        else:
+            print("Configuration file does not exist. Use --generate-config")
+
     else:
         with open(ojoin(CFG_PATH, CFG_FILE), 'r') as fh:
             config = json.load(fh)
