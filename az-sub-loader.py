@@ -130,6 +130,7 @@ def main():
             print(exp_templ.format(**variables))
         else:
             print(f"Subscription {SUBS} does not exist in config file.")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
